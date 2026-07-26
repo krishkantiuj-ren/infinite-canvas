@@ -3,6 +3,7 @@
 ## Unreleased
 
 + [新增] Render 部署支持通过同源 `/ddshub/v1/` 代理调用 DDShub，避免浏览器跨域预检阻断模型读取和图像生成。
++ [新增] Render 部署支持通过同源 `/fastai/v1/` 接入 FastAIToken，并将生图请求转发到备用图像端点。
 
 ## v0.10.0 - 2026-07-25
 
