@@ -2,6 +2,8 @@
 
 ## Unreleased
 
++ [新增] Render 部署支持通过同源 `/ddshub/v1/` 代理调用 DDShub，避免浏览器跨域预检阻断模型读取和图像生成。
+
 ## v0.10.0 - 2026-07-25
 
 + [新增] 提示词来源新增BananaPromptQuicker，并支持添加自定义标准 JSON 来源。
