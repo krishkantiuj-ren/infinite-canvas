@@ -299,15 +299,17 @@ export default function ImagePage() {
     const refreshLogs = async () => setLogs(await readStoredLogs());
 
     const previewGenerationLog = async (log: GenerationLog) => {
-        setPreviewLog(log);
+        const storedLog = await logStore.getItem<GenerationLog>(log.id);
+        const hydratedLog = await normalizeLog(storedLog || log, true);
+        setPreviewLog(hydratedLog);
         setLogsOpen(false);
-        setPrompt(log.prompt);
-        setReferences(log.references || []);
-        if (log.config.imageModel || log.model) updateConfig("imageModel", log.config.imageModel || log.model);
-        if (log.config.quality) updateConfig("quality", log.config.quality);
-        if (log.config.size) updateConfig("size", log.config.size);
-        if (log.config.count) updateConfig("count", log.config.count);
-        setResults(log.images.map((image) => ({ id: image.id, status: "success", image })));
+        setPrompt(hydratedLog.prompt);
+        setReferences(hydratedLog.references || []);
+        if (hydratedLog.config.imageModel || hydratedLog.model) updateConfig("imageModel", hydratedLog.config.imageModel || hydratedLog.model);
+        if (hydratedLog.config.quality) updateConfig("quality", hydratedLog.config.quality);
+        if (hydratedLog.config.size) updateConfig("size", hydratedLog.config.size);
+        if (hydratedLog.config.count) updateConfig("count", hydratedLog.config.count);
+        setResults(hydratedLog.images.map((image) => ({ id: image.id, status: "success", image })));
     };
 
     const buildRequestSnapshot = () => {
@@ -783,26 +785,20 @@ async function readStoredLogs() {
         await logStore.iterate<GenerationLog, void>((value) => {
             values.push(value);
         });
-        const logs = await Promise.all(values.map(normalizeLog));
+        const logs = await Promise.all(values.map((log) => normalizeLog(log, false)));
         return logs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch {
         return [];
     }
 }
 
-async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
-    const references = await Promise.all(
-        (log.references || []).map(async (item) => ({
-            ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
-        })),
-    );
-    const images = await Promise.all(
-        (log.images || []).map(async (item) => ({
-            ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
-        })),
-    );
+async function normalizeLog(log: Partial<GenerationLog>, hydrateImages: boolean): Promise<GenerationLog> {
+    const references = hydrateImages
+        ? await Promise.all((log.references || []).map(async (item) => ({ ...item, dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl) })))
+        : log.references || [];
+    const images = hydrateImages
+        ? await Promise.all((log.images || []).map(async (item) => ({ ...item, dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl) })))
+        : log.images || [];
     const config = normalizeLogConfig(log);
     return {
         id: log.id || nanoid(),
@@ -821,7 +817,7 @@ async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog>
         quality: log.quality || config.quality || "",
         status: log.status || "success",
         images,
-        thumbnails: images.map((image) => image.dataUrl).filter(Boolean),
+        thumbnails: hydrateImages ? images.map((image) => image.dataUrl).filter(Boolean) : [],
     };
 }
 
