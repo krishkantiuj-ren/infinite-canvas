@@ -1,6 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
-import i18n from "@/i18n";
 import { buildApiUrl, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type RequestOptions = { signal?: AbortSignal };
@@ -98,7 +97,7 @@ function createPoll(signal?: AbortSignal) {
             if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
             const result = extract(await request());
             if (result !== null && result !== undefined && result !== false) return result;
-            if (performance.now() >= deadline) throw new Error(i18n.t("modelPlugin.pollTimeout"));
+            if (performance.now() >= deadline) throw new Error("插件轮询超时，请检查调用脚本或稍后重试");
             await sleep(intervalMs, signal);
         }
     };
@@ -106,9 +105,9 @@ function createPoll(signal?: AbortSignal) {
 
 /**
  * Run a user-authored model call script as an async function body with flat locals (see PLUGIN_VARIABLES):
- *   prompt / images / messages / params        — request input
- *   model / baseUrl / apiKey / systemPrompt / reasoningEffort     — current channel and text settings
- *   http / request / poll / sleep / signal / onDelta    — request helpers
+ *   prompt / images / messages / params        —— 本次请求的输入
+ *   model / baseUrl / apiKey / systemPrompt / reasoningEffort     —— 当前渠道与文本设置
+ *   http / request / poll / sleep / signal / onDelta    —— 调用辅助
  * The script must `return` the result; each caller normalizes it to its capability's shape.
  */
 export async function runModelPlugin<T = unknown>(args: RunPluginArgs): Promise<T> {
@@ -156,48 +155,48 @@ export async function runModelPlugin<T = unknown>(args: RunPluginArgs): Promise<
         if (error instanceof DOMException && error.name === "AbortError") throw error;
         if (axios.isCancel(error)) throw error;
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(i18n.t("modelPlugin.executionFailed", { message }));
+        throw new Error(`模型调用脚本执行失败：${message}`);
     }
 }
 
 export type PluginVariable = { name: string; type: string; desc: string; capabilities?: ModelCapability[] };
 
 /** Documentation surface shown in the script editor. */
-export function getPluginVariables(): PluginVariable[] {
-    return [
-        { name: "prompt", type: "string", desc: i18n.t("modelPlugin.variables.prompt"), capabilities: ["image", "video", "audio"] },
-        { name: "images", type: "string[]", desc: i18n.t("modelPlugin.variables.images"), capabilities: ["image", "video"] },
-        { name: "messages", type: "{ role, content }[]", desc: i18n.t("modelPlugin.variables.messages"), capabilities: ["text"] },
-        { name: "params", type: "object", desc: i18n.t("modelPlugin.variables.params") },
-        { name: "model", type: "string", desc: i18n.t("modelPlugin.variables.model") },
-        { name: "baseUrl", type: "string", desc: i18n.t("modelPlugin.variables.baseUrl") },
-        { name: "apiKey", type: "string", desc: i18n.t("modelPlugin.variables.apiKey") },
-        { name: "systemPrompt", type: "string", desc: i18n.t("modelPlugin.variables.systemPrompt") },
-        { name: "reasoningEffort", type: '"auto" | "low" | "medium" | "high" | "xhigh"', desc: i18n.t("modelPlugin.variables.reasoningEffort"), capabilities: ["text"] },
-        { name: "http", type: "object", desc: i18n.t("modelPlugin.variables.http") },
-        { name: "request", type: "function", desc: i18n.t("modelPlugin.variables.request") },
-        { name: "poll", type: "function", desc: i18n.t("modelPlugin.variables.poll") },
-        { name: "sleep", type: "function", desc: i18n.t("modelPlugin.variables.sleep") },
-        { name: "signal", type: "AbortSignal", desc: i18n.t("modelPlugin.variables.signal") },
-        { name: "onDelta", type: "function", desc: i18n.t("modelPlugin.variables.onDelta"), capabilities: ["text"] },
-    ];
-}
+export const PLUGIN_VARIABLES: PluginVariable[] = [
+    { name: "prompt", type: "string", desc: "用户输入的提示词（已拼接系统提示词）", capabilities: ["image", "video", "audio"] },
+    { name: "images", type: "string[]", desc: "参考图，dataURL 数组（改图 / 图生视频时有值）", capabilities: ["image", "video"] },
+    { name: "messages", type: "{ role, content }[]", desc: "对话消息数组，含系统消息", capabilities: ["text"] },
+    { name: "params", type: "object", desc: "生成参数：生图 {size,quality,count}、视频 {seconds,size,resolution,ratio,generateAudio,watermark}、音频 {voice,format,speed,instructions}" },
+    { name: "model", type: "string", desc: "模型名称（不含渠道前缀）" },
+    { name: "baseUrl", type: "string", desc: "渠道接口地址（原样，未拼 /v1）" },
+    { name: "apiKey", type: "string", desc: "渠道 API Key，请求头里自己带上" },
+    { name: "systemPrompt", type: "string", desc: "系统提示词原文" },
+    { name: "reasoningEffort", type: '"auto" | "low" | "medium" | "high" | "xhigh"', desc: "文本推理强度；auto 表示由脚本决定是否传递", capabilities: ["text"] },
+    { name: "http", type: "object", desc: "便捷请求：http.post(path, body, {headers,params,responseType})、http.get(path, opts)、http.url(path)；默认带 Authorization: Bearer apiKey，可用 headers 覆盖；path 相对时按 baseUrl 拼 /v1" },
+    { name: "request", type: "function", desc: "原始请求 request({ method, url, headers, params, data, responseType })，不加任何默认头，鉴权头自己写；url 相对时按 baseUrl 拼接（不加 /v1）" },
+    { name: "poll", type: "function", desc: "轮询 poll(request, extract, {intervalMs,timeoutMs})，extract 返回真值即结束" },
+    { name: "sleep", type: "function", desc: "sleep(ms) 延时" },
+    { name: "signal", type: "AbortSignal", desc: "取消信号，可透传给 http/request" },
+    { name: "onDelta", type: "function", desc: "onDelta(text) 推送流式文本（文本模型）", capabilities: ["text"] },
+];
 
-export function getPluginReturn(capability: ModelCapability) {
-    return i18n.t(`modelPlugin.returns.${capability}`);
-}
+export const PLUGIN_RETURNS: Record<ModelCapability, string> = {
+    image: "文生图（images 为空）和图生图（images 有参考图）接口不同，脚本需自行区分；返回图片 URL 或 dataURL 字符串，也可返回它们的数组，或 [{ dataUrl }] / [{ url }] / [{ b64_json }]",
+    video: "脚本内部完成轮询，返回 { url } 或 { blob } 或视频 URL 字符串",
+    audio: "返回 Blob，或 base64 / dataURL 字符串，或 { b64_json } / { data } / { url }",
+    text: "用 onDelta(text) 推送流式，最终 return 完整文本字符串",
+};
 
 export type PluginTemplate = { label: string; script: string };
 
-export function getPluginTemplates(): Record<ModelCapability, PluginTemplate[]> {
-    return {
+export const PLUGIN_TEMPLATES: Record<ModelCapability, PluginTemplate[]> = {
     image: [
         {
-            label: i18n.t("modelPlugin.templates.openai"),
-            script: `// ${i18n.t("modelPlugin.templates.imageOpenai")}
-// ${i18n.t("modelPlugin.templates.availableImage")}
+            label: "OpenAI 规范",
+            script: `// 生图 / 改图：两者接口不同，用 images 是否为空来区分。
+// 可用：prompt、images(dataURL[])、params{size,quality,count}、model、baseUrl、apiKey
 if (images.length === 0) {
-  // ${i18n.t("modelPlugin.templates.textToImage")}
+  // 文生图：/images/generations（JSON）
   const data = await request({
     method: "post",
     url: \`\${baseUrl}/v1/images/generations\`,
@@ -207,7 +206,7 @@ if (images.length === 0) {
   return (data.data || []).map((item) => item.b64_json ? \`data:image/png;base64,\${item.b64_json}\` : item.url);
 }
 
-// ${i18n.t("modelPlugin.templates.imageToImage")}
+// 图生图：/images/edits（multipart/form-data，参考图作为文件上传）
 const form = new FormData();
 form.set("model", model);
 form.set("prompt", prompt);
@@ -219,15 +218,15 @@ for (const dataUrl of images) {
 const edited = await request({
   method: "post",
   url: \`\${baseUrl}/v1/images/edits\`,
-  headers: { Authorization: \`Bearer \${apiKey}\` }, // ${i18n.t("modelPlugin.templates.formDataHeader")}
+  headers: { Authorization: \`Bearer \${apiKey}\` }, // 不要手动设 Content-Type，交给浏览器带 boundary
   data: form,
 });
 return (edited.data || []).map((item) => item.b64_json ? \`data:image/png;base64,\${item.b64_json}\` : item.url);`,
         },
         {
-            label: i18n.t("modelPlugin.templates.gemini"),
-            script: `// ${i18n.t("modelPlugin.templates.imageGemini")}
-// ${i18n.t("modelPlugin.templates.availableImageGemini")}
+            label: "Gemini 规范",
+            script: `// Gemini 文生图 / 图生图：都走 generateContent，参考图放进 parts 的 inline_data。
+// 可用：prompt、images(dataURL[])、model、baseUrl、apiKey
 const parts = [{ text: prompt }];
 for (const dataUrl of images) {
   const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
@@ -248,8 +247,8 @@ return (data.candidates || [])
     ],
     video: [
         {
-            label: i18n.t("modelPlugin.templates.openai"),
-            script: `// ${i18n.t("modelPlugin.templates.videoOpenai")}
+            label: "OpenAI 规范",
+            script: `// 视频（脚本内部自行轮询）。可用：prompt、images(dataURL[])、params{seconds,size,resolution,ratio}
 const headers = { "Content-Type": "application/json", Authorization: \`Bearer \${apiKey}\` };
 const task = await request({
   method: "post",
@@ -264,9 +263,9 @@ return await poll(
 );`,
         },
         {
-            label: i18n.t("modelPlugin.templates.gemini"),
-            script: `// ${i18n.t("modelPlugin.templates.videoGemini")}
-// ${i18n.t("modelPlugin.templates.availableVideoGemini")}
+            label: "Gemini 规范",
+            script: `// Gemini(Veo) 视频：predictLongRunning 提交，轮询 operation 拿视频 URI。
+// 可用：prompt、images(dataURL[])、params、model、baseUrl、apiKey
 const headers = { "Content-Type": "application/json", "x-goog-api-key": apiKey };
 const instance = { prompt };
 const first = images[0] && images[0].match(/^data:([^;]+);base64,(.*)$/);
@@ -282,7 +281,7 @@ return await poll(
   (state) => {
     if (!state.done) return null;
     const uri = state.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
-    if (!uri) throw new Error(${JSON.stringify(i18n.t("modelPlugin.templates.geminiNoVideoUri"))});
+    if (!uri) throw new Error("Gemini 未返回视频 URI");
     return { url: uri.includes("key=") ? uri : \`\${uri}\${uri.includes("?") ? "&" : "?"}key=\${apiKey}\` };
   },
   { intervalMs: 5000, timeoutMs: 300000 },
@@ -291,8 +290,8 @@ return await poll(
     ],
     audio: [
         {
-            label: i18n.t("modelPlugin.templates.openai"),
-            script: `// ${i18n.t("modelPlugin.templates.audioOpenai")}
+            label: "OpenAI 规范",
+            script: `// 音频 TTS。可用：prompt、params{voice,format,speed,instructions}、model
 return await request({
   method: "post",
   url: \`\${baseUrl}/v1/audio/speech\`,
@@ -302,9 +301,9 @@ return await request({
 });`,
         },
         {
-            label: i18n.t("modelPlugin.templates.gemini"),
-            script: `// ${i18n.t("modelPlugin.templates.audioGemini")}
-// ${i18n.t("modelPlugin.templates.availableAudioGemini")}
+            label: "Gemini 规范",
+            script: `// Gemini TTS：generateContent + AUDIO 模态，返回 base64 PCM（音频数据在 inlineData.data）。
+// 可用：prompt、params{voice}、model、baseUrl、apiKey
 const data = await request({
   method: "post",
   url: \`\${baseUrl}/v1beta/models/\${model}:generateContent\`,
@@ -318,14 +317,14 @@ const data = await request({
   },
 });
 const audio = data.candidates?.[0]?.content?.parts?.map((p) => p.inlineData || p.inline_data).find(Boolean);
-if (!audio?.data) throw new Error(${JSON.stringify(i18n.t("modelPlugin.templates.geminiNoAudio"))});
+if (!audio?.data) throw new Error("Gemini 未返回音频");
 return { data: audio.data };`,
         },
     ],
     text: [
         {
-            label: i18n.t("modelPlugin.templates.openai"),
-            script: `// ${i18n.t("modelPlugin.templates.textOpenai")}
+            label: "OpenAI 规范",
+            script: `// 文本对话（OpenAI Responses 接口）。可用：messages([{role,content}])、systemPrompt、model、reasoningEffort
 const data = await request({
   method: "post",
   url: \`\${baseUrl}/v1/responses\`,
@@ -343,9 +342,9 @@ onDelta(text);
 return text;`,
         },
         {
-            label: i18n.t("modelPlugin.templates.gemini"),
-            script: `// ${i18n.t("modelPlugin.templates.textGemini")}
-// ${i18n.t("modelPlugin.templates.availableTextGemini")}
+            label: "Gemini 规范",
+            script: `// Gemini 文本：generateContent，system 消息放 systemInstruction。
+// 可用：messages([{role,content}])、systemPrompt、model、baseUrl、apiKey
 const contents = messages
   .filter((m) => m.role !== "system")
   .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
@@ -360,8 +359,7 @@ onDelta(text);
 return text;`,
         },
     ],
-    };
-}
+};
 
 /** Normalize whatever an image script returns into the app's generated-image shape. */
 export function normalizePluginImages(result: unknown): string[] {
@@ -378,6 +376,6 @@ export function normalizePluginImages(result: unknown): string[] {
             return "";
         })
         .filter(Boolean);
-    if (!urls.length) throw new Error(i18n.t("modelPlugin.noImages"));
+    if (!urls.length) throw new Error("模型调用脚本没有返回图片");
     return urls;
 }

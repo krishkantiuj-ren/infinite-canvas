@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { App } from "antd";
-import { useTranslation } from "react-i18next";
 import { APP_VERSION } from "@/constant/env";
 import { parseChangelog, type ReleaseInfo } from "@/lib/release";
 
@@ -24,7 +23,6 @@ function isNewerVersion(latestVersion: string, currentVersion: string) {
 }
 
 export function useVersionCheck() {
-    const { t } = useTranslation();
     const currentVersion = APP_VERSION;
     const { message } = App.useApp();
     const localReleases = useMemo(readLocalReleases, []);
@@ -51,23 +49,23 @@ export function useVersionCheck() {
             setChecking(true);
             try {
                 const [versionResponse, changelogResponse] = await Promise.all([fetch(latestVersionUrl), fetch(latestChangelogUrl)]);
-                if (!versionResponse.ok) throw new Error(t("version.readFailed"));
-                if (!changelogResponse.ok) throw new Error(t("version.changelogFailed"));
+                if (!versionResponse.ok) throw new Error("版本读取失败");
+                if (!changelogResponse.ok) throw new Error("更新日志读取失败");
                 const [version, changelog] = await Promise.all([versionResponse.text(), changelogResponse.text()]);
                 setLatestVersion(version.trim() || currentVersion);
                 if (changelog.trim()) setReleases(parseChangelog(changelog));
-                if (showMessage) message.success(t("version.updated"));
+                if (showMessage) message.success("已获取最新版本信息");
                 return true;
             } catch {
                 setLatestVersion(currentVersion);
                 setReleases(localReleases);
-                if (showMessage) message.error(t("version.updateFailed"));
+                if (showMessage) message.error("获取最新版本信息失败");
                 return false;
             } finally {
                 setChecking(false);
             }
         },
-        [currentVersion, localReleases, message, t],
+        [currentVersion, localReleases, message],
     );
 
     useEffect(() => {

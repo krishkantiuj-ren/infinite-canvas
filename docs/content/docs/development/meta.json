@@ -1,6 +1,10 @@
 {
-  "title": "Development",
+  "title": "开发文档",
   "root": true,
   "defaultOpen": true,
-  "pages": ["local-development", "canvas-data-structure", "local-codex-canvas"]
+  "pages": [
+    "local-development",
+    "canvas-data-structure",
+    "local-codex-canvas"
+  ]
 }

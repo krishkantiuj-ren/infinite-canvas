@@ -3,11 +3,10 @@ import { notFound } from 'next/navigation';
 
 export const revalidate = false;
 
-export async function GET(req: Request, { params }: RouteContext<'/llms.mdx/docs/[[...slug]]'>) {
+export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/docs/[[...slug]]'>) {
   const { slug } = await params;
-  const locale = new URL(req.url).searchParams.get('locale') ?? 'en';
   // remove the appended "content.md"
-  const page = source.getPage(slug?.slice(0, -1), locale);
+  const page = source.getPage(slug?.slice(0, -1));
   if (!page) notFound();
 
   return new Response(await getLLMText(page), {
@@ -18,7 +17,7 @@ export async function GET(req: Request, { params }: RouteContext<'/llms.mdx/docs
 }
 
 export function generateStaticParams() {
-  return source.getPages('en').map((page) => ({
+  return source.getPages().map((page) => ({
     slug: getPageMarkdownUrl(page).segments,
   }));
 }

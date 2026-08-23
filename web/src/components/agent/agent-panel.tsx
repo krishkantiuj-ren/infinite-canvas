@@ -1,6 +1,5 @@
 import { useState, type PointerEvent as ReactPointerEvent } from "react";
 import { motion } from "motion/react";
-import { useTranslation } from "react-i18next";
 
 import { LocalAgentPanel } from "./local-agent-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -10,7 +9,6 @@ import { useThemeStore } from "@/stores/use-theme-store";
 const PANEL_MOTION_SECONDS = CANVAS_AGENT_PANEL_MOTION_MS / 1000;
 
 export function AgentPanel() {
-    const { t } = useTranslation();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const width = useAgentStore((state) => state.width);
     const [resizing, setResizing] = useState(false);
@@ -46,7 +44,7 @@ export function AgentPanel() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: panelOpen ? width + 1 : 0, opacity: panelOpen ? 1 : 0 }}
             transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: "clip", pointerEvents: panelOpen && !panelClosing ? undefined : "none" }}
+            style={{ overflow: "clip", pointerEvents: panelClosing ? "none" : undefined }}
         >
             <motion.aside
                 className="relative flex h-full shrink-0 flex-col border-l"
@@ -56,7 +54,7 @@ export function AgentPanel() {
                 transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
                 style={{ width, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             >
-                <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onPointerDown={startResize} aria-label={t("agent.panel.resize")} />
+                <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onPointerDown={startResize} aria-label="调整右侧面板宽度" />
                 <LocalAgentPanel embedded />
             </motion.aside>
         </motion.div>

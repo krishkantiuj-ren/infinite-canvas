@@ -1,4 +1,3 @@
-import i18n from "@/i18n";
 import { CanvasNodeType } from "@/types/canvas";
 import type { CanvasNodeMetadata } from "@/types/canvas";
 import { getNodeSpec as getRegistryNodeSpec } from "@/lib/canvas/node-registry";
@@ -11,42 +10,42 @@ type CanvasNodeSpec = {
 };
 
 export const NODE_DEFAULT_SIZE = {
-    [CanvasNodeType.Image]: { width: 340, height: 240, get title() { return i18n.t("canvas.nodeTypes.image"); } },
-    [CanvasNodeType.Text]: { width: 340, height: 240, get title() { return i18n.t("canvas.nodeTypes.text"); } },
-    [CanvasNodeType.Config]: { width: 340, height: 240, get title() { return i18n.t("canvas.nodeTypes.config"); } },
-    [CanvasNodeType.Video]: { width: 420, height: 236, get title() { return i18n.t("canvas.nodeTypes.video"); } },
-    [CanvasNodeType.Audio]: { width: 340, height: 120, get title() { return i18n.t("canvas.nodeTypes.audio"); } },
-    [CanvasNodeType.Group]: { width: 760, height: 480, get title() { return i18n.t("canvas.nodeTypes.group"); } },
+    [CanvasNodeType.Image]: { width: 340, height: 240, title: "图片" },
+    [CanvasNodeType.Text]: { width: 340, height: 240, title: "文本" },
+    [CanvasNodeType.Config]: { width: 340, height: 240, title: "生成配置" },
+    [CanvasNodeType.Video]: { width: 420, height: 236, title: "视频" },
+    [CanvasNodeType.Audio]: { width: 340, height: 120, title: "音频" },
+    [CanvasNodeType.Group]: { width: 760, height: 480, title: "组" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {
     [CanvasNodeType.Image]: {
-        width: 340, height: 240, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Image].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Image],
         metadata: { content: "", status: "idle" },
     },
     [CanvasNodeType.Text]: {
-        width: 340, height: 240, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Text].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Text],
         metadata: { content: "", status: "idle", fontSize: 14 },
     },
     [CanvasNodeType.Config]: {
-        width: 340, height: 240, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Config].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Config],
         metadata: { content: "", status: "idle", generationMode: "image" },
     },
     [CanvasNodeType.Video]: {
-        width: 420, height: 236, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Video].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Video],
         metadata: { content: "", status: "idle" },
     },
     [CanvasNodeType.Audio]: {
-        width: 340, height: 120, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Audio].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Audio],
         metadata: { content: "", status: "idle" },
     },
     [CanvasNodeType.Group]: {
-        width: 760, height: 480, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Group].title; },
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.Group],
         metadata: { status: "idle" },
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;
 
-// Return built-in specs directly and resolve plugin types from the registry.
+// 内置类型返回内置 spec;插件类型从注册表解析
 export function getNodeSpec(type: string) {
     if ((Object.values(CanvasNodeType) as string[]).includes(type)) return NODE_SPECS[type as CanvasNodeType];
     const spec = getRegistryNodeSpec(type);

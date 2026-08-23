@@ -1,6 +1,5 @@
 import localforage from "localforage";
 
-import i18n from "@/i18n";
 import { getMediaBlob, resolveMediaUrl, setMediaBlob } from "@/services/file-storage";
 import { getImageBlob, resolveImageUrl, setImageBlob } from "@/services/image-storage";
 import { downloadWebdavFile, uploadWebdavFile, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
@@ -168,7 +167,7 @@ async function syncDomain<T>(config: WebdavSyncConfig, onProgress: AppSyncProgre
             uploadedBytes: uploaded.uploadedBytes,
         };
     } catch (error) {
-        emitProgress(onProgress, { domain: options.key, label: options.label, stage: error instanceof Error ? error.message : i18n.t("config.webdav.errors.syncFailed"), status: "exception" });
+        emitProgress(onProgress, { domain: options.key, label: options.label, stage: error instanceof Error ? error.message : "同步失败", status: "exception" });
         throw error;
     }
 }
@@ -177,7 +176,7 @@ async function readDomainManifest<T>(config: WebdavSyncConfig, domain: DomainKey
     const file = await downloadWebdavFile(config, domainPath(domain, WEBDAV_MANIFEST_FILE_NAME));
     if (!file) return null;
     const data = JSON.parse(await file.text()) as DomainManifest<T>;
-    if (data.app !== "infinite-canvas" || data.domain !== domain) throw new Error(i18n.t("config.webdav.errors.invalidManifest", { domain }));
+    if (data.app !== "infinite-canvas" || data.domain !== domain) throw new Error(`${domain} 同步清单不是当前应用的数据`);
     return {
         app: "infinite-canvas",
         version: 1,

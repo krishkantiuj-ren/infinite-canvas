@@ -15,14 +15,7 @@ import { create } from '@orama/orama';
 import { useI18n } from 'fumadocs-ui/contexts/i18n';
 import { createDocsSearchTokenizer } from '@/lib/search-tokenizer';
 
-function initOrama(locale?: string) {
-  if (locale !== 'zh-CN') {
-    return create({
-      schema: { _: 'string' },
-      language: 'english',
-    });
-  }
-
+function initOrama() {
   return create({
     schema: { _: 'string' },
     components: {
@@ -32,7 +25,7 @@ function initOrama(locale?: string) {
 }
 
 export default function DefaultSearchDialog(props: SharedProps) {
-  const { locale } = useI18n();
+  const { locale } = useI18n(); // (optional) for i18n
   const { search, setSearch, query } = useDocsSearch({
     type: 'static',
     initOrama,

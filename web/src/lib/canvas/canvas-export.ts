@@ -1,6 +1,5 @@
 import { saveAs } from "file-saver";
 
-import i18n from "@/i18n";
 import { createZip } from "@/lib/zip";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
@@ -8,7 +7,7 @@ import type { CanvasExportAsset, CanvasExportFile } from "@/types/canvas-export"
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
-export async function exportCanvasProjects(projects: CanvasProject[], fileName = i18n.t("canvas.export.defaultProjectName")) {
+export async function exportCanvasProjects(projects: CanvasProject[], fileName = "无限画布") {
     const zipFiles: { name: string; data: BlobPart }[] = [];
     const exportedProjects = await Promise.all(
         projects.map(async (project) => {
@@ -31,11 +30,11 @@ export async function exportCanvasProjects(projects: CanvasProject[], fileName =
     saveAs(zip, `${safeFileName(fileName)}.zip`);
 }
 
-export async function exportCanvasNodes(nodes: CanvasNodeData[], fileName = i18n.t("canvas.export.defaultNodesName")) {
+export async function exportCanvasNodes(nodes: CanvasNodeData[], fileName = "画布元素") {
     const zipFiles: { name: string; data: BlobPart }[] = [];
     const used = new Set<string>();
     const uniqueName = (base: string, ext: string) => {
-        const safe = safeFileName(base) || i18n.t("canvas.export.item");
+        const safe = safeFileName(base) || "元素";
         let name = `${safe}.${ext}`;
         for (let i = 1; used.has(name); i += 1) name = `${safe}-${i}.${ext}`;
         used.add(name);

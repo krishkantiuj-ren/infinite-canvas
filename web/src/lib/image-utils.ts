@@ -1,4 +1,3 @@
-import i18n from "@/i18n";
 import type { ReferenceImage } from "@/types/image";
 
 export function formatBytes(bytes: number) {
@@ -19,7 +18,7 @@ export function formatDuration(ms: number) {
     const value = Math.max(0, Math.floor(ms / 1000));
     const minutes = Math.floor(value / 60);
     const seconds = value % 60;
-    return minutes ? i18n.t("common.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") }) : i18n.t("common.durationSeconds", { seconds });
+    return minutes ? `${minutes}分${String(seconds).padStart(2, "0")}秒` : `${seconds}秒`;
 }
 
 export function getDataUrlByteSize(dataUrl: string) {
@@ -35,7 +34,7 @@ export function readFileAsDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error(i18n.t("common.imageReadFailed")));
+        reader.onerror = () => reject(new Error("读取图片失败"));
         reader.readAsDataURL(file);
     });
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Button, InputNumber, Modal, Tooltip } from "antd";
 import { Grid2x2, ListRestart, PanelTop, Redo2, Rows3, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useTranslation } from "react-i18next";
 
 import { readImageMeta } from "@/lib/image-utils";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
@@ -14,7 +13,6 @@ const maxGridSize = 12;
 type ActiveLine = { axis: "horizontal" | "vertical"; index: number } | null;
 
 export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (params: CanvasImageSplitParams) => void }) {
-    const { t } = useTranslation();
     const [params, setParams] = useState(defaultParams);
     const [image, setImage] = useState<{ width: number; height: number } | null>(null);
     const [active, setActive] = useState<ActiveLine>(null);
@@ -151,9 +149,9 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
         <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={780} centered destroyOnHidden transitionName="" maskTransitionName="">
             <div className="space-y-5" data-canvas-no-zoom>
                 <div>
-                    <h2 className="text-xl font-semibold">{t("canvas.editors.splitTitle")}</h2>
-                    <p className="mt-1 text-sm opacity-60">{t("canvas.editors.splitDescription", { count: total })}</p>
-                    <p className="mt-2 text-xs leading-5 opacity-55">{t("canvas.editors.splitHint")}</p>
+                    <h2 className="text-xl font-semibold">切分图片</h2>
+                    <p className="mt-1 text-sm opacity-60">生成 {total} 个图片子节点，并按原图网格排列到画布右侧</p>
+                    <p className="mt-2 text-xs leading-5 opacity-55">滚轮缩放 · 中键或空格+左键拖动画面 · Delete 删除选中线 · Ctrl/Cmd+Z 撤回 · Ctrl/Cmd+Shift+Z 重做</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_280px]">
                     <div className="rounded-xl border p-4">
@@ -173,54 +171,54 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
                         </div>
                         <div className="mt-3 flex items-center justify-between text-sm">
                             <div className="flex items-center gap-1">
-                                <Tooltip title={t("canvas.editors.undoSplitTitle")}>
-                                    <Button type="text" icon={<Undo2 className="size-4" />} disabled={!historySize} aria-label={t("canvas.editors.undoSplit")} onClick={undoSplit} />
+                                <Tooltip title="撤回切图调整 (Ctrl/Cmd+Z)">
+                                    <Button type="text" icon={<Undo2 className="size-4" />} disabled={!historySize} aria-label="撤回切图调整" onClick={undoSplit} />
                                 </Tooltip>
-                                <Tooltip title={t("canvas.editors.redoSplitTitle")}>
-                                    <Button type="text" icon={<Redo2 className="size-4" />} disabled={!redoSize} aria-label={t("canvas.editors.redoSplit")} onClick={redoSplit} />
+                                <Tooltip title="重做切图调整 (Ctrl/Cmd+Shift+Z)">
+                                    <Button type="text" icon={<Redo2 className="size-4" />} disabled={!redoSize} aria-label="重做切图调整" onClick={redoSplit} />
                                 </Tooltip>
-                                <Tooltip title={t("canvas.editors.zoomOut")}>
-                                    <Button type="text" icon={<ZoomOut className="size-4" />} disabled={!viewport.canZoomOut} aria-label={t("canvas.editors.zoomOut")} onClick={viewport.zoomOut} />
+                                <Tooltip title="缩小">
+                                    <Button type="text" icon={<ZoomOut className="size-4" />} disabled={!viewport.canZoomOut} aria-label="缩小" onClick={viewport.zoomOut} />
                                 </Tooltip>
                                 <button type="button" className="min-w-14 text-center text-xs font-semibold tabular-nums opacity-70" onClick={viewport.resetZoom}>
                                     {Math.round(viewport.zoom * 100)}%
                                 </button>
-                                <Tooltip title={t("canvas.editors.zoomIn")}>
-                                    <Button type="text" icon={<ZoomIn className="size-4" />} disabled={!viewport.canZoomIn} aria-label={t("canvas.editors.zoomIn")} onClick={viewport.zoomIn} />
+                                <Tooltip title="放大">
+                                    <Button type="text" icon={<ZoomIn className="size-4" />} disabled={!viewport.canZoomIn} aria-label="放大" onClick={viewport.zoomIn} />
                                 </Tooltip>
                             </div>
-                            <span className="font-semibold">{image ? `${image.width} x ${image.height} px` : t("canvas.editors.loading")}</span>
+                            <span className="font-semibold">{image ? `${image.width} x ${image.height} px` : "读取中"}</span>
                         </div>
                     </div>
                     <div className="space-y-5 py-2">
-                        <NumberField label={t("canvas.editors.rows")} value={rows} onChange={(value) => update("rows", value)} />
-                        <NumberField label={t("canvas.editors.columns")} value={columns} onChange={(value) => update("columns", value)} />
+                        <NumberField label="行数" value={rows} onChange={(value) => update("rows", value)} />
+                        <NumberField label="列数" value={columns} onChange={(value) => update("columns", value)} />
                         <div className="grid grid-cols-2 gap-2">
                             <Button icon={<Rows3 className="size-4" />} onClick={() => addLine("horizontal")}>
-                                {t("canvas.editors.horizontalLine")}
+                                横向线
                             </Button>
                             <Button icon={<PanelTop className="size-4 rotate-90" />} onClick={() => addLine("vertical")}>
-                                {t("canvas.editors.verticalLine")}
+                                纵向线
                             </Button>
                             <Button icon={<Trash2 className="size-4" />} disabled={!active} onClick={deleteLine}>
-                                {t("canvas.editors.deleteLine")}
+                                删除线
                             </Button>
                             <Button icon={<ListRestart className="size-4" />} onClick={resetLines}>
-                                {t("canvas.editors.resetLines")}
+                                重置线
                             </Button>
                         </div>
                         <div className="rounded-xl border px-4 py-3 text-sm">
                             <div className="flex items-center justify-between">
-                                <span className="opacity-60">{t("canvas.editors.pieceCount")}</span>
-                                <span className="font-semibold">{t("canvas.editors.pieces", { count: total })}</span>
+                                <span className="opacity-60">切片数量</span>
+                                <span className="font-semibold">{total} 个</span>
                             </div>
                             <div className="mt-2 flex items-center justify-between">
-                                <span className="opacity-60">{t("canvas.editors.averageSize")}</span>
-                                <span className="font-semibold">{pieceSize ? `${pieceSize.width} x ${pieceSize.height}` : t("canvas.editors.unknown")}</span>
+                                <span className="opacity-60">平均约</span>
+                                <span className="font-semibold">{pieceSize ? `${pieceSize.width} x ${pieceSize.height}` : "未知"}</span>
                             </div>
                         </div>
                         <Button type="primary" size="large" className="w-full" icon={<Grid2x2 className="size-4" />} onClick={() => onConfirm(confirmParams)}>
-                            {t("canvas.editors.generateChildren")}
+                            生成子节点
                         </Button>
                     </div>
                 </div>
