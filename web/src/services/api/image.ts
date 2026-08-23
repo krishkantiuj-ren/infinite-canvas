@@ -333,6 +333,10 @@ function aiApiUrl(config: AiConfig, path: string) {
     return buildApiUrl(config.baseUrl, path);
 }
 
+function imageResponseFormat(config: Pick<AiConfig, "baseUrl">) {
+    return /(?:^|\/)ddshub\/?$/.test(config.baseUrl.trim()) ? "url" : "b64_json";
+}
+
 function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
@@ -753,7 +757,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                 ...(quality ? { quality } : {}),
                 ...(requestSize ? { size: requestSize } : {}),
                 ...(background ? { background } : {}),
-                response_format: "b64_json",
+                response_format: imageResponseFormat(requestConfig),
                 output_format: IMAGE_OUTPUT_FORMAT,
             },
             {
@@ -815,7 +819,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
                     model: requestConfig.model,
                     prompt: withSystemPrompt(requestConfig, requestPrompt),
                     n,
-                    response_format: "b64_json",
+                    response_format: imageResponseFormat(requestConfig),
                     output_format: IMAGE_OUTPUT_FORMAT,
                     image: refs,
                     ...(quality ? { quality } : {}),
@@ -840,7 +844,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     formData.set("model", requestConfig.model);
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
-    formData.set("response_format", "b64_json");
+    formData.set("response_format", imageResponseFormat(requestConfig));
     formData.set("output_format", IMAGE_OUTPUT_FORMAT);
     if (quality) {
         formData.set("quality", quality);
