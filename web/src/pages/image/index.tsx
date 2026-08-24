@@ -185,13 +185,14 @@ export default function ImagePage() {
         if (agentTaskId) updateAgentTask(agentTaskId, { status: successCount ? "succeeded" : "failed", successCount, failCount, error: successCount ? undefined : error });
 
         try {
-            const logImages = await Promise.all(
-                successImages.map(async (image) => {
-                    const stored = await uploadImage(image.dataUrl);
-                    return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
+            const logImages = await Promise.all(successImages.map((image) => persistGeneratedImage(image)));
+            setResults((value) =>
+                value.map((item) => {
+                    const stored = logImages.find((image) => image.id === item.image?.id);
+                    return stored && item.image ? { ...item, image: stored } : item;
                 }),
             );
-            saveLog(
+            await saveLog(
                 buildLog({
                     prompt: text,
                     model,
@@ -289,8 +290,9 @@ export default function ImagePage() {
         setDeleteConfirmOpen(false);
     };
 
-    const saveLog = (log: GenerationLog) => {
-        void logStore.setItem(log.id, serializeLog(log)).then(refreshLogs);
+    const saveLog = async (log: GenerationLog) => {
+        await logStore.setItem(log.id, serializeLog(log));
+        await refreshLogs();
     };
 
     const refreshLogs = async () => setLogs(await readStoredLogs());
@@ -345,10 +347,9 @@ export default function ImagePage() {
         const retryStartedAt = performance.now();
         try {
             const image = await runGenerationSlot(index, snapshot);
-            const stored = await uploadImage(image.dataUrl);
-            const logImage = { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
-            setResults((value) => updateResultAt(value, index, { image: { ...image, dataUrl: stored.url, storageKey: stored.storageKey } }));
-            saveLog(
+            const logImage = await persistGeneratedImage(image);
+            setResults((value) => updateResultAt(value, index, { image: logImage }));
+            await saveLog(
                 buildLog({
                     prompt: snapshot.text,
                     model,
@@ -900,4 +901,14 @@ function buildLog({
         images,
         thumbnails: images.map((image) => image.dataUrl).filter(Boolean),
     };
+}
+
+async function persistGeneratedImage(image: GeneratedImage): Promise<GeneratedImage> {
+    try {
+        const stored = await uploadImage(image.dataUrl);
+        return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
+    } catch {
+        // A provider URL is still usable as a history fallback when local Blob storage fails.
+        return image;
+    }
 }
