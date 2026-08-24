@@ -9,12 +9,11 @@ COPY CHANGELOG.md /app/CHANGELOG.md
 COPY web ./
 RUN bun run build
 
-# 运行镜像：只启动静态前端，AI 请求由浏览器前台直连用户自己的接口。
-FROM nginx:1.27-alpine
+# 运行镜像：Node 同时提供静态前端和长耗时 DDShub 任务代理。
+FROM node:22-alpine
 
-COPY --from=web-build /app/web/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY web/docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
-RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
+COPY --from=web-build /app/web/dist /app/web/dist
+COPY server.mjs /app/server.mjs
 
 EXPOSE 3000
+CMD ["node", "/app/server.mjs"]

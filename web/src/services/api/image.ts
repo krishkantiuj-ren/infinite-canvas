@@ -337,6 +337,38 @@ function imageResponseFormat(config: Pick<AiConfig, "baseUrl">) {
     return /(?:^|\/)ddshub\/?$/.test(config.baseUrl.trim()) ? "url" : "b64_json";
 }
 
+function isDdshubConfig(config: Pick<AiConfig, "baseUrl">) {
+    return imageResponseFormat(config) === "url";
+}
+
+async function requestDdshubImageTask(config: AiConfig, path: string, body: BodyInit, contentType?: string, options?: RequestOptions) {
+    const response = await fetch(aiApiUrl(config, path), {
+        method: "POST",
+        headers: aiHeaders(config, contentType),
+        body,
+        signal: options?.signal,
+    });
+    if (!response.ok) throw new Error(await readFetchError(response, "请求失败"));
+    const task = (await response.json()) as { id?: string; status?: string };
+    if (!task.id) throw new Error("任务接口没有返回任务 ID");
+
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+        await new Promise((resolve, reject) => {
+            const timer = window.setTimeout(resolve, 2500);
+            options?.signal?.addEventListener("abort", () => {
+                window.clearTimeout(timer);
+                reject(new DOMException("请求已取消", "AbortError"));
+            }, { once: true });
+        });
+        const statusResponse = await fetch(aiApiUrl(config, `${path}/tasks/${encodeURIComponent(task.id)}`), { headers: aiHeaders(config), signal: options?.signal });
+        if (statusResponse.status === 202) continue;
+        if (!statusResponse.ok) throw new Error(await readFetchError(statusResponse, "请求失败"));
+        return parseImagePayload(await statusResponse.json());
+    }
+    throw new Error("生图任务等待超时，请稍后查看记录或重试");
+}
+
 function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
@@ -748,18 +780,20 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const requestSize = resolveRequestSize(quality, config.size);
     const background = normalizeBackground(config.background);
     try {
+        const body = {
+            model: requestConfig.model,
+            prompt: withSystemPrompt(requestConfig, prompt),
+            n,
+            ...(quality ? { quality } : {}),
+            ...(requestSize ? { size: requestSize } : {}),
+            ...(background ? { background } : {}),
+            response_format: imageResponseFormat(requestConfig),
+            output_format: IMAGE_OUTPUT_FORMAT,
+        };
+        if (isDdshubConfig(requestConfig)) return await requestDdshubImageTask(requestConfig, "/images/generations", JSON.stringify(body), "application/json", options);
         const response = await axios.post<ImageApiResponse>(
             aiApiUrl(requestConfig, "/images/generations"),
-            {
-                model: requestConfig.model,
-                prompt: withSystemPrompt(requestConfig, prompt),
-                n,
-                ...(quality ? { quality } : {}),
-                ...(requestSize ? { size: requestSize } : {}),
-                ...(background ? { background } : {}),
-                response_format: imageResponseFormat(requestConfig),
-                output_format: IMAGE_OUTPUT_FORMAT,
-            },
+            body,
             {
                 headers: aiHeaders(requestConfig, "application/json"),
                 signal: options?.signal,
@@ -860,6 +894,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
+        if (isDdshubConfig(requestConfig)) return await requestDdshubImageTask(requestConfig, "/images/edits", formData, undefined, options);
         const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig), signal: options?.signal });
         const images = parseImagePayload(response.data);
         return images;
