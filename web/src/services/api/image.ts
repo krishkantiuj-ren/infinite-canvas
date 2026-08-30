@@ -354,19 +354,31 @@ async function requestDdshubImageTask(config: AiConfig, path: string, body: Body
 
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
-        await new Promise((resolve, reject) => {
-            const timer = window.setTimeout(resolve, 2500);
-            options?.signal?.addEventListener("abort", () => {
-                window.clearTimeout(timer);
-                reject(new DOMException("请求已取消", "AbortError"));
-            }, { once: true });
-        });
+        await waitForImageTaskPoll(options?.signal);
         const statusResponse = await fetch(aiApiUrl(config, `${path}/tasks/${encodeURIComponent(task.id)}`), { headers: aiHeaders(config), signal: options?.signal });
         if (statusResponse.status === 202) continue;
         if (!statusResponse.ok) throw new Error(await readFetchError(statusResponse, "请求失败"));
         return parseImagePayload(await statusResponse.json());
     }
     throw new Error("生图任务等待超时，请稍后查看记录或重试");
+}
+
+function waitForImageTaskPoll(signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException("请求已取消", "AbortError"));
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, 2500);
+        const onAbort = () => {
+            window.clearTimeout(timer);
+            reject(new DOMException("请求已取消", "AbortError"));
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+    });
 }
 
 function aiHeaders(config: AiConfig, contentType?: string) {

@@ -33,13 +33,15 @@ async function handleApi(req, res, url, route) {
     if (isImage) {
         const id = randomUUID();
         const body = await readBody(req);
-        const task = { id, status: "queued", updatedAt: Date.now(), body: null };
+        const task = { id, status: "queued", updatedAt: Date.now(), body: null, files: [] };
         tasks.set(id, task);
         void runImageTask(task, url.pathname, req.headers, body);
         return writeJson(res, 202, { id, status: "queued" });
     }
 
     const taskMatch = url.pathname.match(/^\/ddshub\/v1\/images\/(generations|edits)\/tasks\/([^/]+)$/);
+    const fileMatch = url.pathname.match(/^\/ddshub\/v1\/images\/(generations|edits)\/tasks\/([^/]+)\/files\/(\d+)$/);
+    if (req.method === "GET" && fileMatch) return readImageTaskFile(res, decodeURIComponent(fileMatch[2]), Number(fileMatch[3]));
     if (req.method === "GET" && taskMatch) return readImageTask(res, decodeURIComponent(taskMatch[2]));
 
     const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readBody(req);
@@ -53,10 +55,11 @@ async function runImageTask(task, pathname, headers, body) {
     task.updatedAt = Date.now();
     try {
         const response = await fetchUpstream(upstreamUrl(pathname, { ddshub: true, fastai: false }), "POST", headers, body, 10 * 60 * 1000);
-        task.status = response.ok ? "succeeded" : "failed";
         task.statusCode = response.status;
         task.headers = { "content-type": response.headers.get("content-type") || "application/json" };
         task.body = Buffer.from(await response.arrayBuffer());
+        if (response.ok) await cacheImageUrls(task, pathname);
+        task.status = response.ok ? "succeeded" : "failed";
     } catch (error) {
         task.status = "failed";
         task.statusCode = 502;
@@ -72,6 +75,58 @@ function readImageTask(res, id) {
     if (task.status === "queued" || task.status === "running") return writeJson(res, 202, { id, status: task.status });
     res.writeHead(task.statusCode, task.headers);
     return res.end(task.body);
+}
+
+function readImageTaskFile(res, id, index) {
+    const task = tasks.get(id);
+    const file = task?.files?.[index];
+    if (!file) return writeText(res, 404, "text/plain", "图片文件不存在或已过期");
+    res.writeHead(200, { "content-type": file.contentType });
+    return res.end(file.body);
+}
+
+async function cacheImageUrls(task, pathname) {
+    if (!task.body || !task.headers["content-type"]?.includes("json")) return;
+    let payload;
+    try {
+        payload = JSON.parse(task.body.toString("utf8"));
+    } catch {
+        return;
+    }
+    if (!payload || typeof payload !== "object") return;
+
+    const lists = [payload.data, payload.images, payload.results];
+    let changed = false;
+    for (const list of lists) {
+        if (!Array.isArray(list)) continue;
+        for (const item of list) {
+            if (!item || typeof item.url !== "string" || !/^https?:\/\//i.test(item.url)) continue;
+            try {
+                const image = await downloadImage(item.url);
+                const index = task.files.push(image) - 1;
+                item.url = `${pathname}/tasks/${encodeURIComponent(task.id)}/files/${index}`;
+                changed = true;
+            } catch {
+                // Keep the provider URL as a fallback when the image CDN is unavailable.
+            }
+        }
+    }
+    if (changed) task.body = Buffer.from(JSON.stringify(payload));
+}
+
+async function downloadImage(url) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60 * 1000);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`图片下载失败（HTTP ${response.status}）`);
+        return {
+            body: Buffer.from(await response.arrayBuffer()),
+            contentType: response.headers.get("content-type") || "application/octet-stream",
+        };
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function upstreamUrl(pathname, route) {

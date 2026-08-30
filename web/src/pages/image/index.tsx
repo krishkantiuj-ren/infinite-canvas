@@ -53,7 +53,8 @@ type GenerationLog = {
     imageCount: number;
     size: string;
     quality: string;
-    status: "成功" | "失败";
+    status: "生成中" | "成功" | "失败";
+    error?: string;
     images: GeneratedImage[];
     thumbnails: string[];
 };
@@ -173,6 +174,26 @@ export default function ImagePage() {
         setResults(Array.from({ length: generationCount }, () => ({ id: nanoid(), status: "pending" })));
         const batchStartedAt = performance.now();
         setStartedAt(batchStartedAt);
+        const logId = nanoid();
+        const logConfig = { ...snapshot.config, count: String(generationCount) };
+        try {
+            await saveLog(
+                buildLog({
+                    id: logId,
+                    prompt: text,
+                    model,
+                    config: logConfig,
+                    references: snapshot.references,
+                    durationMs: 0,
+                    successCount: 0,
+                    failCount: 0,
+                    status: "生成中",
+                    images: [],
+                }),
+            );
+        } catch {
+            message.warning("生成记录暂时无法保存");
+        }
 
         const tasks = Array.from({ length: generationCount }, (_, index) => runGenerationSlot(index, snapshot));
 
@@ -194,18 +215,22 @@ export default function ImagePage() {
             );
             await saveLog(
                 buildLog({
+                    id: logId,
                     prompt: text,
                     model,
-                    config: { ...snapshot.config, count: String(generationCount) },
+                    config: logConfig,
                     references: snapshot.references,
                     durationMs: performance.now() - batchStartedAt,
                     successCount,
                     failCount,
                     status: successCount ? "成功" : "失败",
+                    error: successCount ? undefined : error,
                     images: logImages,
                 }),
             );
             successCount ? message.success("图片已生成") : message.error(failed?.reason instanceof Error ? failed.reason.message : "生成失败");
+        } catch (saveError) {
+            message.error(saveError instanceof Error ? `生成完成，但记录保存失败：${saveError.message}` : "生成完成，但记录保存失败");
         } finally {
             setRunning(false);
         }
@@ -363,8 +388,22 @@ export default function ImagePage() {
                 }),
             );
             message.success("重试成功");
-        } catch {
-            // runGenerationSlot 已经把结果状态更新为 failed
+        } catch (error) {
+            const failure = error instanceof Error ? error.message : "生成失败";
+            await saveLog(
+                buildLog({
+                    prompt: snapshot.text,
+                    model,
+                    config: { ...snapshot.config, count: "1" },
+                    references: snapshot.references,
+                    durationMs: performance.now() - retryStartedAt,
+                    successCount: 0,
+                    failCount: 1,
+                    status: "失败",
+                    error: failure,
+                    images: [],
+                }),
+            ).catch(() => undefined);
         }
     };
 
@@ -733,6 +772,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                     <Checkbox className="mt-0.5" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelectedChange(event.target.checked)} />
                     <div className="min-w-0">
                         <div className="truncate text-sm font-semibold leading-5">{log.title}</div>
+                        {log.error ? <div className="mt-1 truncate text-xs text-red-600 dark:text-red-400" title={log.error}>{log.error}</div> : null}
                         {thumbnails.length ? (
                             <div className="mt-2 flex gap-1 overflow-hidden">
                                 {thumbnails.map((image, index) => (
@@ -744,6 +784,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                 </div>
                 <div className="grid justify-items-end gap-2">
                     <div className="flex gap-1">
+                        {log.status === "生成中" ? <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none" color="orange">生成中</Tag> : null}
                         <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none" color="blue">
                             成功 {log.successCount ?? log.imageCount}
                         </Tag>
@@ -775,7 +816,15 @@ async function readStoredLogs() {
         await logStore.iterate<GenerationLog, void>((value) => {
             values.push(value);
         });
-        const logs = await Promise.all(values.map(normalizeLog));
+        const logs = await Promise.all(
+            values.map(async (value) => {
+                try {
+                    return await normalizeLog(value);
+                } catch {
+                    return normalizeLog({ ...value, references: [], images: [] });
+                }
+            }),
+        );
         return logs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch {
         return [];
@@ -784,16 +833,10 @@ async function readStoredLogs() {
 
 async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
     const references = await Promise.all(
-        (log.references || []).map(async (item) => ({
-            ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
-        })),
+        (log.references || []).map((item) => resolveStoredImage(item)),
     );
     const images = await Promise.all(
-        (log.images || []).map(async (item) => ({
-            ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
-        })),
+        (log.images || []).map((item) => resolveStoredImage(item)),
     );
     const config = normalizeLogConfig(log);
     return {
@@ -808,10 +851,11 @@ async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog>
         durationMs: log.durationMs || 0,
         successCount: log.successCount ?? log.imageCount ?? 0,
         failCount: log.failCount || 0,
-        imageCount: log.imageCount || log.successCount || 0,
+        imageCount: images.length,
         size: log.size || config.size || "",
         quality: log.quality || config.quality || "",
-        status: log.status || "成功",
+        status: log.status === "生成中" || log.status === "失败" ? log.status : "成功",
+        error: log.error,
         images,
         thumbnails: images.map((image) => image.dataUrl).filter(Boolean),
     };
@@ -855,6 +899,7 @@ function ReferenceOrderButtons({ index, total, onMove }: { index: number; total:
 }
 
 function buildLog({
+    id,
     prompt,
     model,
     config,
@@ -863,8 +908,10 @@ function buildLog({
     successCount,
     failCount,
     status,
+    error,
     images,
 }: {
+    id?: string;
     prompt: string;
     model: string;
     config: GenerationLogConfig;
@@ -873,6 +920,7 @@ function buildLog({
     successCount: number;
     failCount: number;
     status: GenerationLog["status"];
+    error?: string;
     images: GeneratedImage[];
 }): GenerationLog {
     const logConfig = {
@@ -883,7 +931,7 @@ function buildLog({
         count: config.count,
     };
     return {
-        id: nanoid(),
+        id: id || nanoid(),
         createdAt: Date.now(),
         title: prompt.slice(0, 12) || "未命名",
         prompt,
@@ -894,13 +942,22 @@ function buildLog({
         durationMs,
         successCount,
         failCount,
-        imageCount: Number(logConfig.count) || successCount,
+        imageCount: images.length,
         size: logConfig.size,
         quality: logConfig.quality,
         status,
+        error,
         images,
         thumbnails: images.map((image) => image.dataUrl).filter(Boolean),
     };
+}
+
+async function resolveStoredImage<T extends { storageKey?: string; dataUrl?: string }>(item: T): Promise<T> {
+    try {
+        return { ...item, dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl || "") };
+    } catch {
+        return { ...item, dataUrl: item.dataUrl || "" };
+    }
 }
 
 async function persistGeneratedImage(image: GeneratedImage): Promise<GeneratedImage> {
