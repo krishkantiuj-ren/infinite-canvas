@@ -338,7 +338,10 @@ function imageResponseFormat(_config: Pick<AiConfig, "baseUrl">) {
 }
 
 function isDdshubConfig(config: Pick<AiConfig, "baseUrl">) {
-    return /(?:^|\/)ddshub\/?$/.test(config.baseUrl.trim());
+    const baseUrl = config.baseUrl.trim().replace(/\/+$/, "").toLowerCase();
+    if (/(^|\/)ddshub$/.test(baseUrl)) return true;
+    const host = baseUrl.replace(/^https?:\/\//, "").split("/", 1)[0];
+    return /(^|\.)ddshub\.cc$/.test(host);
 }
 
 async function requestDdshubImageTask(config: AiConfig, path: string, body: BodyInit, contentType?: string, options?: RequestOptions) {
@@ -762,7 +765,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const script = resolveModelScript(config, config.model || config.imageModel);
-    if (script) {
+    if (script && !isDdshubConfig(requestConfig)) {
         const quality = normalizeQuality(config.quality);
         const requestSize = resolveRequestSize(quality, config.size);
         const background = normalizeBackground(config.background);
@@ -823,7 +826,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     const script = resolveModelScript(config, config.model || config.imageModel);
-    if (script) {
+    if (script && !isDdshubConfig(requestConfig)) {
         const quality = normalizeQuality(config.quality);
         const requestSize = resolveRequestSize(quality, config.size);
         const background = normalizeBackground(config.background);
