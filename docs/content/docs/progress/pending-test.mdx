@@ -5,6 +5,8 @@ description: 当前版本已实现但仍需人工验证的变更项
 
 # 待测试
 
+- DDShub 历史图片保存：请求使用 `b64_json` 并保留任务轮询；新图完成后刷新页面，历史预览应仍能显示。现有部署可为 DDShub 模型配置 `plugins/ddshub-image-persistence.js` 调用脚本；已过期且未缓存的旧图不能靠更改调用方式恢复。
+
 - DDShub 同源代理：Render 部署后访问 `/ddshub/v1/models`，未携带 API Key 时应返回 DDShub 的 `401 API_KEY_REQUIRED` JSON；无限画布渠道 Base URL 设置为当前站点的 `/ddshub`、填写有效 Key 后，应能拉取模型并通过 `/v1/images/generations` 完成生图，代理不得在仓库或服务端保存 Key。
 - FastAIToken 同源代理：Render 部署后访问 `/fastai/v1/models`，填写有效 Key 后应能拉取模型；无限画布渠道 Base URL 设置为当前站点的 `/fastai`、模型设置为 `gpt-image-2` 后，`/v1/images/generations` 应转发到 `https://fast.ns.tisoz.com/v1/images/generations`，代理不得在仓库或服务端保存 Key。
 - Agent 新对话响应：一轮对话完成后点击「新对话」，聊天内容应立即清空并进入空白对话，不出现等待或新建按钮卡顿；此时不应生成空历史记录，第一次发送消息时才创建线程；多个标签页应同步进入空白对话，点击后立即发送也不得误发到上一条会话。

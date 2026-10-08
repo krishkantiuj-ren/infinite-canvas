@@ -195,14 +195,24 @@ export const PLUGIN_TEMPLATES: Record<ModelCapability, PluginTemplate[]> = {
             label: "OpenAI 规范",
             script: `// 生图 / 改图：两者接口不同，用 images 是否为空来区分。
 // 可用：prompt、images(dataURL[])、params{size,quality,count}、model、baseUrl、apiKey
+const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "").toLowerCase();
+const isDdshub = /(?:^|\/)ddshub$/.test(normalizedBaseUrl) || /(?:^|\/)\/?(?:[a-z0-9-]+\.)*ddshub\.cc(?:\/|$)/.test(normalizedBaseUrl);
+async function submit(path, data, headers) {
+  const result = await http.post(path, data, { headers });
+  if (!isDdshub || !result?.id || result?.data) return result;
+  return await poll(
+    () => http.get(path + "/tasks/" + encodeURIComponent(result.id)),
+    (task) => {
+      if (task.status === "queued" || task.status === "running") return null;
+      if (task.error) throw new Error(task.error.message || String(task.error));
+      return task;
+    },
+    { intervalMs: 2500, timeoutMs: 600000 },
+  );
+}
 if (images.length === 0) {
   // 文生图：/images/generations（JSON）
-  const data = await request({
-    method: "post",
-    url: \`\${baseUrl}/v1/images/generations\`,
-    headers: { "Content-Type": "application/json", Authorization: \`Bearer \${apiKey}\` },
-    data: { model, prompt, n: params.count, size: params.size, response_format: "b64_json" },
-  });
+  const data = await submit("/images/generations", { model, prompt, n: params.count, size: params.size, quality: params.quality, output_format: "png", response_format: "b64_json" }, { "Content-Type": "application/json" });
   return (data.data || []).map((item) => item.b64_json ? \`data:image/png;base64,\${item.b64_json}\` : item.url);
 }
 
@@ -215,12 +225,7 @@ form.set("response_format", "b64_json");
 for (const dataUrl of images) {
   form.append("image", await (await fetch(dataUrl)).blob(), "ref.png");
 }
-const edited = await request({
-  method: "post",
-  url: \`\${baseUrl}/v1/images/edits\`,
-  headers: { Authorization: \`Bearer \${apiKey}\` }, // 不要手动设 Content-Type，交给浏览器带 boundary
-  data: form,
-});
+const edited = await submit("/images/edits", form);
 return (edited.data || []).map((item) => item.b64_json ? \`data:image/png;base64,\${item.b64_json}\` : item.url);`,
         },
         {

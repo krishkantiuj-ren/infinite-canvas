@@ -333,12 +333,12 @@ function aiApiUrl(config: AiConfig, path: string) {
     return buildApiUrl(config.baseUrl, path);
 }
 
-function imageResponseFormat(config: Pick<AiConfig, "baseUrl">) {
-    return /(?:^|\/)ddshub\/?$/.test(config.baseUrl.trim()) ? "url" : "b64_json";
+function imageResponseFormat(_config: Pick<AiConfig, "baseUrl">) {
+    return "b64_json";
 }
 
 function isDdshubConfig(config: Pick<AiConfig, "baseUrl">) {
-    return imageResponseFormat(config) === "url";
+    return /(?:^|\/)ddshub\/?$/.test(config.baseUrl.trim());
 }
 
 async function requestDdshubImageTask(config: AiConfig, path: string, body: BodyInit, contentType?: string, options?: RequestOptions) {

@@ -962,10 +962,21 @@ async function resolveStoredImage<T extends { storageKey?: string; dataUrl?: str
 
 async function persistGeneratedImage(image: GeneratedImage): Promise<GeneratedImage> {
     try {
-        const stored = await uploadImage(image.dataUrl);
+        const source = image.dataUrl.startsWith("data:") ? dataUrlToBlob(image.dataUrl) : image.dataUrl;
+        const stored = await uploadImage(source);
         return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
     } catch {
         // A provider URL is still usable as a history fallback when local Blob storage fails.
         return image;
     }
+}
+
+function dataUrlToBlob(dataUrl: string) {
+    const [metadata, encoded] = dataUrl.split(",", 2);
+    if (!metadata || !encoded || !metadata.endsWith(";base64")) throw new Error("图片数据格式无效");
+    const mimeType = metadata.slice(5, -7) || "image/png";
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: mimeType });
 }
